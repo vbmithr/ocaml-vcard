@@ -19,22 +19,18 @@
 open Ast
 %}
 
-%token<string> ID
-%token BEGIN_VCARD END_VCARD DQUOTE COMMA SEMI COLON EQUAL CRLF EOF
+%token<string> ID VALUE
+%token DQUOTE COMMA SEMI EQUAL EOF
 
-%start <Ast.vcard list> vcards
+%start <Ast.content_line list> vcards
 
 %%
 
 vcards:
-| vs = vcard+ EOF { vs }
-
-vcard:
-| BEGIN_VCARD CRLF cls = contentline+ END_VCARD CRLF { cls }
+| vs = contentline* EOF { vs }
 
 contentline:
-| name = ID ps = param* COLON value = ID CRLF
-    { { name; params=ps; value } }
+| name = ID ps = param* value = VALUE { { name; params=ps; value } }
 
 param:
 | SEMI id = ID EQUAL pv = param_value pvs = param_opt* { id, pv::pvs }
@@ -43,5 +39,5 @@ param_opt:
 | COMMA pv = param_value { pv }
 
 param_value:
-| v = ID { v }
+| v = ID
 | DQUOTE v = ID DQUOTE { v }

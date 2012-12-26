@@ -22,4 +22,11 @@ type content_line =
       params: param list;
       value: string }
 
-type vcard = content_line list
+let vcards_of_lines lines =
+  let vcs, _ = List.fold_left (fun (global, local) line ->
+    match String.lowercase line.name with
+      | "begin" -> (global, local)
+      | "end" -> ((List.rev local)::global, [])
+      | _ -> (global, line::local)
+  ) ([],[]) lines in
+  List.rev vcs

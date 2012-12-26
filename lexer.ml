@@ -21,41 +21,46 @@ open Parser
 (* RFC 5234 *)
 
 let regexp alpha  = ['A'-'Z''a'-'z']
-let regexp bit    = ['0''1']
-let regexp char   = ['\x01'-'\x7f']
+let regexp bit    = ["01"]
+let regexp char   = [0x1-0x7f]
 let regexp cr     = '\r'
 let regexp crlf   = "\r\n"
-let regexp ctl    = ['\x00'-'\x1f''\x7f']
+let regexp ctl    = [0-0x1f 0x7f]
 let regexp digit  = ['0'-'9']
-let regexp dquote = "\""
+let regexp dquote = '"'
 let regexp hexdig = ['0'-'9''A'-'F''a'-'f']
 let regexp htab   = '\t'
 let regexp lf     = '\n'
-let regexp octet  = ['\x00'-'\xff']
-let regexp sp     = '\x20'
-let regexp vchar = ['\x21'-'\x7e']
+let regexp octet  = [0-0xff]
+let regexp sp     = 0x20
+let regexp vchar = [0x21-0x7e]
 let regexp wsp    = [' ''\t']
 
 (* RFC 6350 *)
-let regexp nonascii = [^'\x00'-'\xff']
-let regexp qsafechar = (wsp | '!' | ['\x23'-'\x7e'] | nonascii)
-let regexp safechar = (wsp | '!' | ['\x23'-'\x39'] | ['\x3c'-'\x7e'] | nonascii)
+let regexp nonascii = [0x80-0x10ffff]
+let regexp qsafechar = (wsp | '!' | [0x23-0x7e] | nonascii)
+let regexp safechar = (wsp | '!' | [0x23-0x39] | [0x3c-0x7e] | nonascii)
 let regexp valuechar = (wsp | vchar | nonascii)
 
 let regexp alphadigit = (alpha | digit | '-')
 
-exception Error of string
+let rec value_scanner nlines buf = lexer
+  | crlf wsp -> value_scanner (succ nlines) buf lexbuf
+  | crlf -> (succ nlines), Buffer.contents buf
+  | valuechar+ ->
+    Buffer.add_string buf (utf8_lexeme lexbuf);
+    value_scanner nlines buf lexbuf
 
-let rec scanner nlines = lexer
-  | "BEGIN:VCARD" -> nlines, BEGIN_VCARD
-  | "END:VCARD" -> nlines, END_VCARD
-  | crlf wsp        -> scanner (succ nlines) lexbuf
-  | crlf      -> (succ nlines), CRLF
-  | ','             -> nlines, COMMA
-  | ';'             -> nlines, SEMI
-  | ':'             -> nlines,COLON
-  | '='             -> nlines, EQUAL
-  | dquote -> nlines, DQUOTE
+let rec main_scanner nlines = lexer
+  | crlf wsp  -> main_scanner (succ nlines) lexbuf
+  | crlf      -> main_scanner (succ nlines) lexbuf
+  | ','       -> nlines, COMMA
+  | ';'       -> nlines, SEMI
+  | ':'       ->
+    let nlines, content = value_scanner nlines (Buffer.create 100) lexbuf in
+    nlines, VALUE(content)
+  | '='       -> nlines, EQUAL
+  | dquote    -> nlines, DQUOTE
 
-  | safechar -> nlines, ID(utf8_lexeme lexbuf)
-  | eof             -> nlines, EOF
+  | [^"\n\r\t ,;:=\""]+ -> nlines, ID(utf8_lexeme lexbuf)
+  | eof       -> nlines, EOF

@@ -15,23 +15,27 @@
  *
  *)
 
-exception Scanning_error of Lexing.position
+exception Scanning_error of int * int
 exception Syntax_error of Lexing.position
 
 let parse menhir_parser lexbuf =
   let position = ref
-    Lexing.({ pos_fname = Sys.argv.(1); pos_lnum = 1; pos_bol = 0; pos_cnum = 0 }) in
+    Lexing.({ pos_fname = Sys.argv.(1); pos_lnum = 0; pos_bol = 0; pos_cnum = 0 }) in
   let lexer () =
     let ante_position = !position in
-    let nlines, token = Lexer.scanner 1 lexbuf in
-    let () = position := Lexing.({!position with pos_lnum = !position.pos_lnum + nlines;}) in
+    let nlines, token = Lexing.(Lexer.main_scanner !position.pos_lnum lexbuf) in
+    let () = position := Lexing.({!position with pos_lnum = nlines;}) in
     let post_position = !position
     in (token, ante_position, post_position) in
   let revised_parser = MenhirLib.Convert.Simplified.traditional2revised menhir_parser
   in try
        revised_parser lexer
     with
-      | Ulexing.Error -> raise (Scanning_error !position)
+      | Ulexing.Error -> raise (Scanning_error
+                                  (
+                                    Ulexing.lexeme_start lexbuf,
+                                    Ulexing.lexeme_end lexbuf
+                                  ))
       | Parser.Error  -> raise (Syntax_error !position)
 
 let file = ref ""
@@ -43,7 +47,8 @@ let () =
   let ch = if !file = "" then stdin else open_in !file in
   let lexbuf = Ulexing.from_utf8_channel ch in
   try
-    let cs = parse Parser.vcards lexbuf in
-    List.iter (Print.print_vcard stdout) cs
+    let lines = parse Parser.vcards lexbuf in
+    let vcards = Ast.vcards_of_lines lines in
+    List.iter (Print.print_vcard stdout) vcards
   with
     | Syntax_error p -> Lexing.(Printf.eprintf "Syntax error at line %d, exiting.\n" p.pos_lnum)
