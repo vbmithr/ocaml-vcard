@@ -1,0 +1,9 @@
+(executable
+ (name main)
+ (modules ast main lexer parser print)
+ (preprocess
+  (pps sedlex.ppx))
+ (libraries sedlex menhirLib))
+
+(menhir
+ (modules parser))

@@ -20,7 +20,7 @@ exception Syntax_error of Lexing.position
 
 let parse menhir_parser lexbuf =
   let position = ref
-    Lexing.({ pos_fname = Sys.argv.(1); pos_lnum = 0; pos_bol = 0; pos_cnum = 0 }) in
+      Lexing.({ pos_fname = Sys.argv.(1); pos_lnum = 0; pos_bol = 0; pos_cnum = 0 }) in
   let lexer () =
     let ante_position = !position in
     let nlines, token = Lexing.(Lexer.main_scanner !position.pos_lnum lexbuf) in
@@ -29,14 +29,14 @@ let parse menhir_parser lexbuf =
     in (token, ante_position, post_position) in
   let revised_parser = MenhirLib.Convert.Simplified.traditional2revised menhir_parser
   in try
-       revised_parser lexer
-    with
-      | Ulexing.Error -> raise (Scanning_error
-                                  (
-                                    Ulexing.lexeme_start lexbuf,
-                                    Ulexing.lexeme_end lexbuf
-                                  ))
-      | Parser.Error  -> raise (Syntax_error !position)
+    revised_parser lexer
+  with
+  | Lexer.Error (lexeme_start, lexeme_end) -> raise (Scanning_error
+      (
+        lexeme_start,
+        lexeme_end
+      ))
+  | Parser.Error  -> raise (Syntax_error !position)
 
 let file = ref ""
 let args = []
@@ -45,10 +45,14 @@ let usage = "Usage: ./main.native <options> [fichier] (stdin par default)"
 let () =
   Arg.parse args (fun s -> file := s) usage;
   let ch = if !file = "" then stdin else open_in !file in
-  let lexbuf = Ulexing.from_utf8_channel ch in
-  try
-    let lines = parse Parser.vcards lexbuf in
-    let vcards = Ast.vcards_of_lines lines in
-    List.iter (Print.print_vcard stdout) vcards
-  with
-    | Syntax_error p -> Lexing.(Printf.eprintf "Syntax error at line %d, exiting.\n" p.pos_lnum)
+  let lexbuf = Sedlexing.Utf8.from_channel ch in
+  let lines =
+    try parse Parser.vcards lexbuf
+    with Syntax_error p -> begin
+        Lexing.(Printf.eprintf "Syntax error at line %d, exiting.\n" p.pos_lnum);
+        exit 1
+      end
+  in
+
+  let vcards = Ast.vcards_of_lines lines in
+  List.iter (Print.print_vcard stdout) vcards

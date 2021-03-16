@@ -18,15 +18,15 @@
 type param = string * string list
 
 type content_line =
-    { name: string;
-      params: param list;
-      value: string }
+  { name: string;
+    params: param list;
+    value: string }
 
 let vcards_of_lines lines =
   let vcs, _ = List.fold_left (fun (global, local) line ->
-    match String.lowercase line.name with
-      | "begin" -> (global, local)
-      | "end" -> ((List.rev local)::global, [])
-      | _ -> (global, line::local)
+    match String.lowercase_ascii line.name with
+    | "begin" -> (global, local)
+    | "end" -> ((List.rev local)::global, [])
+    | _ -> (global, line::local)
   ) ([],[]) lines in
   List.rev vcs
